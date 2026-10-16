@@ -1,0 +1,238 @@
+{
+  "name": "SlowMegaBot Telegram Automation & Media Downloader",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slowmegabot-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e8df81c1-92b4-4e9f-9c02-7c3a0b1e4561",
+      "name": "1. دریافت وب‌هوک (Telegram Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        180,
+        340
+      ],
+      "webhookId": "slowmegabot-webhook-trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// استخراج و اعتبارسنجی پیام ورودی تلگرام یا وب‌هوک SlowMegaBot\nconst item = $input.first().json;\nconst payload = item.body || item;\nconst message = payload.message || payload;\nconst from = message.from || payload.from || {};\nconst chat = message.chat || payload.chat || {};\n\nconst text = (message.text || message.caption || '').trim();\nconst userId = from.id || chat.id || payload.userId || 0;\nconst username = from.username || payload.username || '';\nconst firstName = from.first_name || payload.firstName || 'کاربر تلگرام';\nconst chatId = chat.id || payload.chatId || userId;\n\n// تشخیص نوع پیام: لینک دانلود رسانه (اینستاگرام، یوتیوب، پینترست) یا دستور ربات\nconst isMediaUrl = /(?:https?:\\/\\/)?(?:www\\.)?(?:instagram\\.com|youtube\\.com|youtu\\.be|pinterest\\.com|pin\\.it)/i.test(text);\nconst isCommand = text.startsWith('/');\n\nreturn [{\n  json: {\n    text,\n    userId,\n    username,\n    firstName,\n    chatId,\n    isMediaUrl,\n    isCommand,\n    timestamp: new Date().toISOString(),\n    source: 'slowmegabot'\n  }\n}];"
+      },
+      "id": "b3e77f0a-1a8c-4d56-a9f2-2b3c4d5e6f70",
+      "name": "2. پردازش و دسته‌بندی پیام (Filter & Router)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.isMediaUrl }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MediaDownload"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.isMediaUrl }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "BotEngine"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c4d5e6f7-a8b9-4c01-d2e3-3f4a5b6c7d81",
+      "name": "3. شاخه‌بندی هوشمند (Switch Router)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        640,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/n8n/download-media",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"={{ $json.text }}\"\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "d5e6f7a8-b9c0-4d12-e3f4-4a5b6c7d8e92",
+      "name": "4. دانلودر اینستاگرام و مدیا (HTTP Downloader)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        920,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/n8n/process-message",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"={{ $json.text }}\",\n  \"userId\": {{ $json.userId }},\n  \"username\": \"={{ $json.username }}\",\n  \"firstName\": \"={{ $json.firstName }}\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e6f7a8b9-c0d1-4e23-f4a5-5b6c7d8e9f03",
+      "name": "5. موتور دستورات ربات (Bot Engine Exec)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        920,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"status\": \"processed\",\n  \"botResponse\": {{ JSON.stringify($json) }},\n  \"timestamp\": \"={{ $now }}\"\n}",
+        "options": {}
+      },
+      "id": "f7a8b9c0-d1e2-4f34-a5b6-6c7d8e9f0a14",
+      "name": "6. ارسال پاسخ به درخواست‌دهنده (Respond to Webhook)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        340
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "1. دریافت وب‌هوک (Telegram Webhook)": {
+      "main": [
+        [
+          {
+            "node": "2. پردازش و دسته‌بندی پیام (Filter & Router)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. پردازش و دسته‌بندی پیام (Filter & Router)": {
+      "main": [
+        [
+          {
+            "node": "3. شاخه‌بندی هوشمند (Switch Router)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. شاخه‌بندی هوشمند (Switch Router)": {
+      "main": [
+        [
+          {
+            "node": "4. دانلودر اینستاگرام و مدیا (HTTP Downloader)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5. موتور دستورات ربات (Bot Engine Exec)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. دانلودر اینستاگرام و مدیا (HTTP Downloader)": {
+      "main": [
+        [
+          {
+            "node": "6. ارسال پاسخ به درخواست‌دهنده (Respond to Webhook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. موتور دستورات ربات (Bot Engine Exec)": {
+      "main": [
+        [
+          {
+            "node": "6. ارسال پاسخ به درخواست‌دهنده (Respond to Webhook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "c8a4901f-63e2-45e0-82bc-9df21d8b671a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "slowmegabot-automation"
+  },
+  "id": "slowmegabot-full-workflow",
+  "tags": [
+    {
+      "name": "SlowMegaBot",
+      "id": "slowmegabot-tag"
+    },
+    {
+      "name": "Telegram",
+      "id": "telegram-tag"
+    }
+  ]
+}

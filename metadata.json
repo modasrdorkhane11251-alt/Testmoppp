@@ -1,0 +1,6 @@
+{
+  "name": "SlowMegaBot - All-In-One Telegram Bot & Simulator",
+  "description": "سامانه یکپارچه تست و اجرای ربات تلگرام با تمامی ماژول‌های مافیا، بت و انفجار، سین‌زن، کلش آف کلنز، چت ناشناس، جعبه ابزار، آپلودر و لایک با قابلیت اتصال توکن واقعی",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
