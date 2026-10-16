@@ -1,0 +1,89 @@
+name: modasr-hub
+
+x-backend: &backend
+  build: ./backend
+  env_file: .env
+  restart: unless-stopped
+  depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_started } }
+  networks: [internal]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: "${POSTGRES_USER}", POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}", POSTGRES_DB: "${POSTGRES_DB}" }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"], interval: 5s, retries: 10 }
+    restart: unless-stopped
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
+    volumes: [redisdata:/data]
+    restart: unless-stopped
+    networks: [internal]
+
+  api:
+    <<: *backend
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"], interval: 15s }
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-l", "info", "-c", "4"]
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "-l", "info"]
+
+  bot:
+    build: ./bot
+    env_file: .env
+    environment: { API_URL: "http://api:8000", WEBHOOK_BASE: "${API_URL}" }
+    depends_on: [api]
+    restart: unless-stopped
+    networks: [internal]
+
+  web:
+    build:
+      context: ./web
+      args: { NEXT_PUBLIC_API_URL: "${API_URL}", NEXT_PUBLIC_TG_BOT_USERNAME: "${TG_BOT_USERNAME}" }
+    environment: { API_INTERNAL_URL: "http://api:8000" }
+    depends_on: [api]
+    restart: unless-stopped
+    networks: [internal]
+
+  n8n:
+    image: n8nio/n8n:latest
+    environment:
+      N8N_HOST: n8n.modasrhub.com
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.modasrhub.com/
+      N8N_ENCRYPTION_KEY: "${N8N_SIGNING_SECRET}"
+      MODASR_SIGNING_SECRET: "${N8N_SIGNING_SECRET}"
+    volumes: [n8ndata:/home/node/.n8n]
+    restart: unless-stopped
+    networks: [internal]
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+    depends_on: [web, api, bot, n8n]
+    restart: unless-stopped
+    networks: [internal]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes: [./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    networks: [internal]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment: { GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}" }
+    volumes: [grafanadata:/var/lib/grafana]
+    networks: [internal]
+
+volumes: { pgdata: {}, redisdata: {}, n8ndata: {}, grafanadata: {} }
+networks: { internal: {} }
