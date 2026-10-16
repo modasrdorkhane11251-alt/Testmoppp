@@ -1,0 +1,14 @@
+@import url("https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&display=swap");
+@tailwind base; @tailwind components; @tailwind utilities;
+
+:root { --bg: #050816; --cyan: #00F0FF; --violet: #B026FF; }
+html { background: var(--bg); color: #E8ECFF; }
+body { font-family: Vazirmatn, sans-serif; min-height: 100dvh;
+  background: radial-gradient(1200px 600px at 85% -10%, #B026FF22, transparent 60%),
+              radial-gradient(900px 500px at 0% 10%, #00F0FF18, transparent 60%), var(--bg); }
+.glass { @apply rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl; }
+.btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-bold transition active:scale-[.98] disabled:opacity-50; }
+.btn-primary { @apply btn bg-gradient-to-l from-cyan to-violet text-ink shadow-neon hover:brightness-110; }
+.btn-ghost { @apply btn border border-white/15 text-white hover:border-cyan/60; }
+.input { @apply w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-cyan; }
+.num { font-family: "Space Grotesk", sans-serif; font-feature-settings: "tnum"; }
